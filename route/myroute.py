@@ -1,13 +1,12 @@
-import http.client
+
 import json
 from werkzeug import Request, Response
 from werkzeug.routing import BaseConverter, Map, Rule
 from werkzeug.exceptions import HTTPException, BadRequest, NotFound
 from werkzeug.serving import run_simple
-from urllib.parse import urlencode
-from NetWork import NetWork
+from route.NetWork import NetWork
 from route.Blueprint import Blueprint
-
+from route.response import CustomResponse
 
 
 class Route:
@@ -100,7 +99,7 @@ class Route:
             params.update(query_args)
             params.update(json_data)
 
-            # 将request对象作为第一个参数传递给视图函数
+            # 将request对象作为第一个参数传递给视图函
             result = view_func(request, **params)
         except HTTPException as ex:
             code = ex.code
@@ -123,13 +122,10 @@ class Route:
                 response = Response('Internal Server Error', mimetype='application/json',status=500)
                 return response(environ, start_response)
 
-
-        if isinstance(result, str):
-            response = Response(result, mimetype='text/plain')
-        elif isinstance(result, dict) or isinstance(result, list):
-            response = Response(json.dumps(result), mimetype='application/json')
-        else:
-            response = Response(result)
+        if isinstance(result, CustomResponse) or isinstance(result, Response):
+            return result(environ, start_response)
+        result = CustomResponse(result, code=200)
+        return result.get_response(environ, start_response)
 
         try:
             return response(environ, start_response)
@@ -170,88 +166,7 @@ class Route:
         self.blueprints.append(blueprint)
 
 
-class MobileConverter(BaseConverter):
-    def __init__(self, map):
-        BaseConverter.__init__(self, map)
-        self.regex = r'1[35678]\d{9}'
 
-    def to_python(self, value):
-        return '{}-{}-{}'.format(value[:3], value[3:7], value[7:12])
-
-    def to_url(self, value):
-        print(value)
-        return value
-
-
-mobile_converter = {'mobile': MobileConverter}
-route = Route(mobile_converter)
-
-
-@route.add_url_route('/')
-def index(request, **kwargs):
-    #raise AssertionError("这只是一个测试")
-    print("url:/")
-    net = NetWork(request)
-    print(net.args.get("str"))
-    query_str = request.args.get('str')
-
-    generated_url = route.url_for("index", str=query_str)
-    return f'str: {query_str}, Generated URL: {generated_url}'
-
-
-#@route.add_url_route("/<username>")
-#def hi(request, username):
-    #generated_url = route.url_for("hi", username=username)
-    #return {"name": username, "Generated URL": generated_url}
-
-
-@route.add_url_route("/phone/<mobile:phoneNumber>")
-def call(request, phoneNumber):
-    generated_url = route.url_for("call", phoneNumber=phoneNumber)
-    return f"call {phoneNumber}, Generated URL: {generated_url}"
-
-@route.register_error_handler(404)
-def handle_404_error():
-    print("404 error occurred")
-
-
-
-@route.register_error_handler("AssertionError")
-def handle_AssertionError_error():
-    print("123")
-    return "123"
-
-
-def begin():
-    print("begin")
-    return 1
-
-def over():
-    print("over")
-    return 1
-
-blueprint = Blueprint("example", "/example")
-
-
-@blueprint.route("/")
-def hello(request, **params):
-    print("hello")
-    return {"message":"hello!"}
-
-
-
-route.register_blueprint(blueprint)
-
-route.before_request(begin)
-
-route.after_request(over)
-
-for blp in route.blueprints:
-    print(blp.url_map)
-
-print(route.url_map)
-
-run_simple('localhost', 5000, route.application)
 
 
 
