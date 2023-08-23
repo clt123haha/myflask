@@ -1,11 +1,7 @@
-
 import json
 from werkzeug import Request, Response
-from werkzeug.routing import BaseConverter, Map, Rule
+from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, BadRequest, NotFound
-from werkzeug.serving import run_simple
-from route.NetWork import NetWork
-from route.Blueprint import Blueprint
 from route.response import CustomResponse
 
 
@@ -48,15 +44,6 @@ class Route:
         path = environ.get('PATH_INFO', '/')
         method = environ.get('REQUEST_METHOD', 'GET').upper()
 
-        if self.befor_handel is not None:
-            for handel in self.befor_handel:
-                handel()
-
-        for middleware in self.Middleware:
-            if hasattr(middleware, "first"):
-                function = getattr(middleware, "first")
-                function()
-
         endpoint = None
         view_func = None
         result = None
@@ -89,15 +76,23 @@ class Route:
                     response = Response(json.dumps({"code":404}), mimetype='application/json',status=404)
                     return response(environ, start_response)
 
-            # 获取查询字符串参数
-            query_args = json.loads(request.data) if request.data else {}
-            # 获取JSON数据
-            json_data = json.loads(request.data) if request.data else {}
 
-            # 合并参数字典，将args、query_args和json_data合并
+            query_args = json.loads(request.data) if request.data else {}
+            json_data = json.loads(request.data) if request.data else {}
+            headers =json.loads(request.headers ) if request.data else {}
+            files = json.loads(request.files) if request.data else {}
+            cookies = json.loads(request.cookies) if request.data else {}
+
+
+
+
             params = dict(args)
             params.update(query_args)
             params.update(json_data)
+            params.update(headers)
+            params.update(files)
+            params.update(cookies)
+
 
             # 将request对象作为第一个参数传递给视图函
             result = view_func(request, **params)
@@ -112,6 +107,7 @@ class Route:
 
         except Exception as ex:
             print(type(ex).__name__)
+            print(ex)
             if type(ex).__name__ in self.exp:
                 func = self.exp.get(type(ex).__name__)
                 result = func()
@@ -165,6 +161,66 @@ class Route:
 
         self.blueprints.append(blueprint)
 
+    def apply_before_handlers(self,select = None):
+        def decorator(view_func):
+            def wrapper(*args, **kwargs):
+                # 执行 before_request 中的函数
+                if select is None:
+                    for handler in self.befor_handel:
+                        handler()
+                    for middleware in self.Middleware:
+                        if hasattr(middleware, "before"):
+                            function = getattr(middleware, "before")
+                            function()
+                else:
+                    for handler in self.befor_handel:
+                         if handler.__name__ in select:
+                            handler()
+                    for middleware in self.Middleware:
+                        if hasattr(middleware, "before") and middleware.__name__ in select:
+                            function = getattr(middleware, "before")
+                            function()
+
+                return view_func(*args, **kwargs)
+
+            # 使用 functools 的 wraps 装饰器来保留原始视图函数的属性
+            import functools
+            wrapped_view = functools.wraps(view_func)(wrapper)
+            return wrapped_view
+
+        return decorator
+
+    def apply_after_handlers(self, select=None):
+        def decorator(view_func):
+            def wrapper(*args, **kwargs):
+                # 调用原始视图函数
+                result = view_func(*args, **kwargs)
+
+                # 执行 after_request 中的函数
+                if select is None:
+                    for handler in self.after_handel:
+                        handler()
+                    for middleware in self.Middleware:
+                        if hasattr(middleware, "after"):
+                            function = getattr(middleware, "after")
+                            function(result)
+                else:
+                    for handler in self.after_handel:
+                        if handler.__name__ in select:
+                            handler()
+                    for middleware in self.Middleware:
+                        if hasattr(middleware, "after") and middleware.__name__ in select:
+                            function = getattr(middleware, "after")
+                            function(result)
+
+                return result
+
+            # 使用 functools 的 wraps 装饰器来保留原始视图函数的属性
+            import functools
+            wrapped_view = functools.wraps(view_func)(wrapper)
+            return wrapped_view
+
+        return decorator
 
 
 
