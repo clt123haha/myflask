@@ -19,13 +19,19 @@ class MobileConverter(BaseConverter):
 
 mobile_converter = {'mobile': MobileConverter}
 route = Route(mobile_converter)
+def begin():
+    print("begin")
 
+
+def over():
+    print("over")
+
+route.before_request(begin)
+route.after_request(over)
 
 @route.register_error_handler(404)
 def handle_404_error():
     print("404 error occurred")
-
-
 
 @route.register_error_handler("AssertionError")
 def handle_AssertionError_error():
@@ -33,6 +39,8 @@ def handle_AssertionError_error():
     return "123"
 
 @route.add_url_route('/')
+@route.apply_before_handlers()
+@route.apply_after_handlers()
 def index(request, **kwargs):
     print("url:/")
     net = NetWork(request)
@@ -43,7 +51,7 @@ def index(request, **kwargs):
     return f'str: {query_str}, Generated URL: {generated_url}'
 
 @route.add_url_route('/error/AssertionError')
-def index(request, **kwargs):
+def AssertionError(request, **kwargs):
     raise AssertionError("这只是一个测试")
 
 
@@ -59,14 +67,6 @@ def call(request, phoneNumber):
     return f"call {phoneNumber}, Generated URL: {generated_url}"
 
 
-def begin():
-    print("begin")
-    return 1
-
-def over():
-    print("over")
-    return 1
-
 blueprint = Blueprint("example", "/example")
 
 
@@ -81,11 +81,8 @@ def two(request, **params):
     response = Response("Hello, Custom MIME Type!", status=200, mimetype="text/plain")
     return response
 
+
 route.register_blueprint(blueprint)
-
-route.before_request(begin)
-
-route.after_request(over)
 
 for blp in route.blueprints:
     print(blp.url_map)
